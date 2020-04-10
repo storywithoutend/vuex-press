@@ -9,6 +9,33 @@ const indexStringToEvent = str => {
     else throw 'func indexStringToEvent: could not parse ' + str
 }
 
+const isJsonString = str => {
+    try {
+      JSON.parse(str)
+    } catch (error) {
+      return false
+    }
+    return true
+}
+  
+const queryToIndex = (query, arr) => {
+    let index = arr.findIndex(item => {
+      for (const key in query) {
+        const value = query[key]
+        if (item[key] != value) return false
+      }
+      return true
+    })
+    return index
+}
+  
+const cloneNode = node => {
+    if (node == null) throw 'cloneNode got null'
+    if (Array.isArray(node)) return Object.assign([], node)
+    else if (typeof node == 'object') return Object.assign({}, node)
+    else throw 'cloneNode: unhandled type'
+}
+
 const set = function(state, data) {
   for (const path in data) {
     try {
