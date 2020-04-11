@@ -1,2 +1,1 @@
-module.exports = {}
-module.exports.set = require('./src/set')
+export { set } from './src/set'

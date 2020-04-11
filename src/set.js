@@ -1,13 +1,4 @@
-const Vue = require('vue');
-
-const indexStringToEvent = str => {
-    if (str == '') return { type: 'push' }
-    else if (str == '0') return { type: 'update', value: 0 }
-    else if (!isNaN(parseInt(str, 10)))
-      return { type: 'update', value: parseInt(str, 10) }
-    else if (isJsonString(str)) return { type: 'query', value: JSON.parse(str) }
-    else throw 'func indexStringToEvent: could not parse ' + str
-}
+import Vue from 'vue'
 
 const isJsonString = str => {
     try {
@@ -17,130 +8,114 @@ const isJsonString = str => {
     }
     return true
 }
-  
-const queryToIndex = (query, arr) => {
-    let index = arr.findIndex(item => {
-      for (const key in query) {
-        const value = query[key]
-        if (item[key] != value) return false
-      }
-      return true
-    })
-    return index
-}
-  
+
 const cloneNode = node => {
-    if (node == null) throw 'cloneNode got null'
-    if (Array.isArray(node)) return Object.assign([], node)
-    else if (typeof node == 'object') return Object.assign({}, node)
-    else throw 'cloneNode: unhandled type'
+  if (node == null) throw 'cloneNode got null'
+  if (Array.isArray(node)) return Object.assign([], node)
+  else if (typeof node == 'object') return Object.assign({}, node)
+  else throw 'cloneNode: unhandled type'
 }
 
-const set = function(state, data) {
-  for (const path in data) {
+// Path functions
+const splitArrayPaths = p => {
+  let index = p.indexOf('[')
+  return index == -1 ? p : [p.substring(0, index), p.substring(index)]
+}
+const concatArray = (acc, val) => acc.concat(val)
+const convertPathToSubpathsArray = path => path.split('.').map(splitArrayPaths).reduce(concatArray, [])
+
+const isArrayIndice = subpath => subpath[0] == '['
+const findIndexOfArrayIndice = subpaths => {
+  let index = subpaths.findIndex(isArrayIndice)
+  return index == -1 ? subpaths.length : index
+}
+const convertPathToSubpaths = p => {
+  let subpaths = convertPathToSubpathsArray(p),
+    index = findIndexOfArrayIndice(subpaths),
+    target = subpaths.slice(0, index),
+    prop = target.pop(),
+    value = subpaths.slice(index)
+  return { target, prop, value}
+}
+
+// Get node from path
+const objectShareValues = a => b => {
+  for (const key in a) {
+    if (a[key] != b[key]) return false
+  }
+  return true
+}
+const queryToIndex = (query, arr) => {
+  const objectMatchesQuery = objectShareValues(query)
+  let index = arr.findIndex(objectMatchesQuery)
+  if (index == -1) throw 'query did not match any object'
+  return index
+}
+const indiceExists = (node, indice) => typeof node[indice] !== 'undefined'
+const convertIndiceStringToIndex = (node, indiceString) => {
+  let indice = indiceString.slice(1, -1)
+  if (indice == "") indice = node.length
+  else if (indice == '0') indice = 0
+  else if (!isNaN(parseInt(indice, 10))) indice = parseInt(indice, 10) 
+  else if (isJsonString(indice)) indice = queryToIndex(JSON.parse(indice), node)
+  else throw 'Could not interpret indice ' + indiceString
+  return indice
+}
+const getNodeFromArrayIndice = (node, indiceString) => {
+  let indice = convertIndiceStringToIndex(node, indiceString)
+  if (!indiceExists(node, indice)) throw 'array does not have index ' + indice
+  return node[indice]
+}
+const getNodeFromPath = (node, path) => {
+  if (node.hasOwnProperty(path)) return node[path]
+  if (isArrayIndice(path)) return getNodeFromArrayIndice(node, path)
+}
+const getNodeFromPathArray = (node, subpaths) => subpaths.reduce(getNodeFromPath, node)
+const convertPropSubpathToProp = (node, subpath) => {
+  if (isArrayIndice(subpath)) return convertIndiceStringToIndex(node, subpath)
+  else return subpath
+}
+
+// Value Operators
+const operatorNumericalKeys = ['$inc', '$dec']
+const operatorKeys = Object.assign([], operatorNumericalKeys)
+const isOperator = value => value && typeof value == 'object' && Object.keys(value).some(key => operatorKeys.includes(key))
+const getOperator = value => Object.keys(value).find(key => operatorKeys.includes(key))
+const getValueFromOperator = (node, prop, value) => {
+  let key = getOperator(value)
+  if (operatorNumericalKeys.includes(key) && isNaN(node[prop])) throw `attempted operator ${key} on a value that is not a number`
+  if (key == '$inc') return node[prop] + value['$inc']
+  else if (key == '$dec') return node[prop] - value['$dec']
+}
+
+const getVueSetVariable = (state, value, subpaths) => {
+  let t = getNodeFromPathArray(state, subpaths.target)
+  let p = convertPropSubpathToProp(t, subpaths.prop)
+  if (subpaths.value.length == 0){
+    let v = isOperator(value) ? getValueFromOperator(t, subpaths.prop, value) : value
+    return {t, p, v}
+  }
+  
+  let v = cloneNode(t[p])
+  let v_path = subpaths.value
+  let v_propPath = v_path.pop()
+  let node = getNodeFromPathArray(v, v_path)
+  let v_prop = convertPropSubpathToProp(node, v_propPath)
+  let v_value = isOperator(value) ? getValueFromOperator(node, v_prop, value) : value
+  node[v_prop] = v_value
+  return { t, p, v}
+}
+
+export const set = function(state, payload){
+  for (const path in payload) {
     try {
-      let value = data[path]
-
-      // No special ops needed
-      if (state.hasOwnProperty(path)) {
-        state[path] = value
-        continue
-      }
-
-      const subpaths = path.split('.')
-
-      let node = state
-      let vueset = null
-
-      // Subpath loop
-      for (let index = 0; index < subpaths.length; index++) {
-        const subpath = subpaths[index]
-        const isLast = index == subpaths.length - 1
-
-        if (node.hasOwnProperty(subpath)) {
-          if (
-            isLast &&
-            typeof value == 'object' &&
-            value.hasOwnProperty('$inc')
-          ) {
-            let inc = value['$inc']
-            value = node[subpath]
-            value = value + inc
-          }
-          if (isLast) node[subpath] = value
-          else node = node[subpath]
-          continue
-        }
-
-        const subpath_matches = subpath.match(/^(.*)\[([^\]]*)\]$/)
-        if (subpath_matches == null) {
-          throw path + ': store does not have subpath ' + subpath
-        }
-
-        const basepath = subpath_matches[1]
-        if (!node.hasOwnProperty(basepath)) {
-          throw path + ': could not find ' + basepath
-        }
-
-        const index_string = subpath_matches[2]
-        let event = indexStringToEvent(index_string)
-
-        if (event.type == 'push' && !isLast) {
-          throw path + ': can not push array if not last subpath'
-        }
-
-        if (event.type == 'query') {
-          let newIndex = queryToIndex(event.value, node[basepath])
-          if (newIndex == -1)
-            throw path + ': could not find query ' + index_string
-          event = {
-            type: 'update',
-            value: newIndex
-          }
-        }
-
-        if (event.type == 'push') {
-          let items = node[basepath]
-          if (Array.isArray(value)) items.push(...value)
-          else items.push(value)
-          node[basepath] = items
-          continue
-        }
-
-        if (event.type == 'update' && vueset == null) {
-          vueset = {}
-          vueset.idx = event.value
-          vueset.tgt = node[basepath]
-          node = cloneNode(node[basepath][event.value])
-          if (
-            isLast &&
-            typeof value == 'object' &&
-            value.hasOwnProperty('$inc')
-          ) {
-            let inc = value['$inc']
-            value = node[basepath][event.value]
-            value = value + inc
-          }
-          vueset.val = isLast ? value : node
-          continue
-        }
-
-        if (event.type == 'update') {
-          node = node[basepath][event.value]
-          continue
-        }
-
-        throw path + ': reached end of subpath look without resolvement'
-      } // Subpath loop
-
-      if (vueset != null) {
-        let { tgt, idx, val } = vueset
-        Vue.set(tgt, idx, val)
-      }
+      let value = payload[path], 
+        subpaths = convertPathToSubpaths(path),
+        { t, p, v } = getVueSetVariable(state, value, subpaths)      
+      Vue.set(t, p, v)
     } catch (error) {
-      console.error(error.message || error)
+      console.error(error)
     }
   }
 }
 
-module.exports = set
