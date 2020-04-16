@@ -1,11 +1,11 @@
 {
   "name": "@storywithoutend/vuex-press",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "helper functions for vuex store",
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --experimental-modules ./tests/set"
   },
   "repository": {
     "type": "git",

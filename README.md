@@ -1,10 +1,19 @@
 # vuex-press
-Build prototypes faster with these helper functions designed to work with the vuex store
+vux-press is a library of reusable general purpose functions for the vuex store.
 
-**WARNING:** I recently rewrote the whole this package to a more functional programming style and to structure it so that new features could easily be added in the future. I haven't personally used it in a project yet so their may be some bugs I haven't found.
+## Contents
+1. **set**: a general purpose mutation function
 
 ## set(state, payload)
-Super useful for when data structures are constantly changing. A general purpose mutation function that should cover the majority of use cases and also feature useful features such as querying objects in an array. Makes liberal use of Vue.set so that new properties are observable as well as changes to arrays
+A general purpose mutation function that 
+*. *observable properties* -  
+*. *querying* - 
+*. *operators* - asdf
+
+```
+{ <path> : <value|operator> }
+```
+
 ### Setup
 ```
 // store/*.js
@@ -22,11 +31,12 @@ export const mutations = {
 **value** is the new value of the varible or an operator to increase or decrease the value of the variable.
 
 ### Examples
-```
 // Change the user's friendly name
+```
 this.$store.commit('user/set', {'friendly_name': 'New Name'})
-
+```
 // Add a new post
+```
 this.$store.commit('posts/set', { items[]: {{ post data }}})
 
 // Change the title of a post
